@@ -31,8 +31,13 @@ export async function GET() {
   let totalMinutes = 0;
   let lateMeetings = 0;
   let backToBack = 0;
+  let longestFocusBlock = 0;
+
+  const dailyMap: Record<string, number> = {};
 
   for (let i = 0; i < events.length; i++) {
+    if (!events[i].start?.dateTime || !events[i].end?.dateTime) continue;
+
     const start = new Date(events[i].start.dateTime);
     const end = new Date(events[i].end.dateTime);
 
@@ -45,29 +50,60 @@ export async function GET() {
       lateMeetings++;
     }
 
-    if (i > 0) {
+    const dayKey = start.toISOString().split("T")[0];
+    dailyMap[dayKey] = (dailyMap[dayKey] || 0) + duration;
+
+    if (i > 0 && events[i - 1].end?.dateTime) {
       const prevEnd = new Date(events[i - 1].end.dateTime);
-      if (start.getTime() - prevEnd.getTime() <= 5 * 60 * 1000) {
+      const gap =
+        (start.getTime() - prevEnd.getTime()) / (1000 * 60);
+
+      if (gap <= 5) {
         backToBack++;
+      }
+
+      if (gap > longestFocusBlock) {
+        longestFocusBlock = gap;
       }
     }
   }
 
   const totalHours = totalMinutes / 60;
 
-  // Simple scoring model
+  const dailyHours = Object.values(dailyMap).map(
+    (min) => min / 60
+  );
+
+  const peakDayHours =
+    dailyHours.length > 0
+      ? Math.max(...dailyHours)
+      : 0;
+
+  // Smarter scoring model
   let score = 100;
 
-  score -= totalHours * 2;        // heavy meeting load penalty
-  score -= backToBack * 3;        // context switching penalty
-  score -= lateMeetings * 5;      // evening burnout penalty
+  score -= totalHours * 1.5;
+  score -= peakDayHours * 4;
+  score -= backToBack * 3;
+  score -= lateMeetings * 5;
+
+  if (longestFocusBlock < 60) {
+    score -= 10;
+  }
 
   if (score < 0) score = 0;
 
+  let risk = "Low";
+  if (score < 40) risk = "High";
+  else if (score < 70) risk = "Medium";
+
   return NextResponse.json({
-    totalHours,
+    totalHours: Number(totalHours.toFixed(2)),
+    peakDayHours: Number(peakDayHours.toFixed(2)),
+    longestFocusBlock: Math.round(longestFocusBlock),
     backToBack,
     lateMeetings,
     workloadScore: Math.round(score),
+    risk,
   });
 }
