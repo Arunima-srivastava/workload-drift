@@ -46,37 +46,29 @@ export async function GET() {
 
     totalMinutes += duration;
 
-    // Late meetings after 6 PM
     if (start.getHours() >= 18) {
       lateMeetings++;
     }
 
-    // Group by day
     const dayKey = start.toISOString().split("T")[0];
     dailyMap[dayKey] = (dailyMap[dayKey] || 0) + duration;
 
-    // Back-to-back + focus gap logic
     if (i > 0 && events[i - 1].end?.dateTime) {
       const prevEnd = new Date(events[i - 1].end.dateTime);
+
+      const sameDay =
+        start.toDateString() === prevEnd.toDateString();
+
+      if (!sameDay) continue;
+
       const gap =
         (start.getTime() - prevEnd.getTime()) / (1000 * 60);
 
-      // Back-to-back if <= 5 min gap
       if (gap <= 5) {
         backToBack++;
       }
 
-      // Only count focus blocks during work hours (8 AM – 8 PM)
-      const startHour = start.getHours();
-      const prevHour = prevEnd.getHours();
-
-      const isWorkHours =
-        startHour >= 8 &&
-        startHour <= 20 &&
-        prevHour >= 8 &&
-        prevHour <= 20;
-
-      if (isWorkHours && gap > longestFocusBlock) {
+      if (gap > longestFocusBlock) {
         longestFocusBlock = gap;
       }
     }
@@ -93,7 +85,6 @@ export async function GET() {
       ? Math.max(...dailyHours)
       : 0;
 
-  // Scoring model
   let score = 100;
 
   score -= totalHours * 1.5;
@@ -101,7 +92,6 @@ export async function GET() {
   score -= backToBack * 3;
   score -= lateMeetings * 5;
 
-  // Penalize if no strong focus blocks
   if (longestFocusBlock < 60) {
     score -= 10;
   }
