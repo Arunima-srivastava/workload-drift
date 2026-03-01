@@ -8,6 +8,29 @@ export default function Home() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
+  function generateInsight(data: any) {
+    if (!data) return "";
+
+    if (data.risk === "High") {
+      if (data.peakDayHours > 5) {
+        return "Your workload is heavily concentrated on a single day. Consider redistributing meetings.";
+      }
+      if (data.backToBack > 5) {
+        return "Frequent back-to-back meetings may reduce recovery time and increase fatigue.";
+      }
+      return "Your weekly meeting load is high and may increase burnout risk.";
+    }
+
+    if (data.risk === "Medium") {
+      if (data.longestFocusBlock < 90) {
+        return "Your focus blocks are fragmented. Try protecting longer deep work windows.";
+      }
+      return "Your workload is moderate but could improve with better spacing.";
+    }
+
+    return "Your workload appears balanced with healthy focus time.";
+  }
+
   useEffect(() => {
     if (session) {
       setLoading(true);
@@ -58,6 +81,7 @@ export default function Home() {
         <h1 className="text-5xl font-bold">
           {data.workloadScore}
         </h1>
+
         <p className="text-xl mt-2">
           Risk Level:{" "}
           <span
@@ -71,6 +95,10 @@ export default function Home() {
           >
             {data.risk}
           </span>
+        </p>
+
+        <p className="mt-4 max-w-md text-center text-gray-600">
+          {generateInsight(data)}
         </p>
       </div>
 
