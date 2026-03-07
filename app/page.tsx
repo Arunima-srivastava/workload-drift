@@ -3,9 +3,20 @@
 import { useSession, signIn, signOut } from "next-auth/react";
 import { useEffect, useState } from "react";
 
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer
+} from "recharts";
+
 export default function Home() {
   const { data: session, status } = useSession();
+
   const [data, setData] = useState<any>(null);
+  const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
   function generateInsight(data: any) {
@@ -16,14 +27,14 @@ export default function Home() {
         return "Your workload is heavily concentrated on a single day. Consider redistributing meetings.";
       }
       if (data.backToBack > 5) {
-        return "Frequent back-to-back meetings may reduce recovery time and increase fatigue.";
+        return "Frequent back-to-back meetings are creating heavy context switching.";
       }
-      return "Your weekly meeting load is high and may increase burnout risk.";
+      return "Your meeting load is high and may increase burnout risk.";
     }
 
     if (data.risk === "Medium") {
       if (data.longestFocusBlock < 90) {
-        return "Your focus blocks are fragmented. Try protecting longer deep work windows.";
+        return "Your focus blocks are fragmented. Protect longer deep work windows.";
       }
       return "Your workload is moderate but could improve with better spacing.";
     }
@@ -34,19 +45,24 @@ export default function Home() {
   useEffect(() => {
     if (session) {
       setLoading(true);
+
       fetch("/api/calendar")
         .then((res) => res.json())
         .then((result) => {
           setData(result);
           setLoading(false);
         });
+
+      fetch("/api/history")
+        .then((res) => res.json())
+        .then((result) => setHistory(result));
     }
   }, [session]);
 
   if (status === "loading") {
     return (
       <main className="min-h-screen flex items-center justify-center">
-        <p>Loading...</p>
+        Loading...
       </main>
     );
   }
@@ -54,9 +70,8 @@ export default function Home() {
   if (!session) {
     return (
       <main className="min-h-screen flex flex-col items-center justify-center gap-6">
-        <h1 className="text-3xl font-semibold">
-          Workload Drift
-        </h1>
+        <h1 className="text-3xl font-semibold">Workload Drift</h1>
+
         <button
           onClick={() => signIn("google")}
           className="px-6 py-3 bg-black text-white rounded-md"
@@ -70,39 +85,46 @@ export default function Home() {
   if (loading || !data) {
     return (
       <main className="min-h-screen flex items-center justify-center">
-        <p>Analyzing your workload...</p>
+        Analyzing your workload...
       </main>
     );
   }
 
   return (
     <main className="min-h-screen p-10 flex flex-col items-center gap-10">
-      <div className="text-center">
-        <h1 className="text-5xl font-bold">
+
+      {/* SCORE CARD */}
+
+      <div className="bg-white shadow-md rounded-xl p-10 text-center w-full max-w-lg">
+        <h1 className="text-6xl font-bold">
           {data.workloadScore}
         </h1>
 
-        <p className="text-xl mt-2">
-          Risk Level:{" "}
-          <span
-            className={
-              data.risk === "High"
-                ? "text-red-500"
-                : data.risk === "Medium"
-                ? "text-yellow-500"
-                : "text-green-500"
-            }
-          >
-            {data.risk}
-          </span>
+        <p className="text-lg mt-2 uppercase tracking-wide">
+          Burnout Risk
         </p>
 
-        <p className="mt-4 max-w-md text-center text-gray-600">
+        <p
+          className={`text-2xl mt-2 font-semibold ${
+            data.risk === "High"
+              ? "text-red-500"
+              : data.risk === "Medium"
+              ? "text-yellow-500"
+              : "text-green-500"
+          }`}
+        >
+          {data.risk}
+        </p>
+
+        <p className="mt-6 text-gray-600">
           {generateInsight(data)}
         </p>
       </div>
 
+      {/* WORKLOAD BREAKDOWN */}
+
       <div className="grid grid-cols-2 gap-6 text-lg">
+
         <div>
           <p className="font-semibold">Total Meeting Hours</p>
           <p>{data.totalHours}</p>
@@ -114,14 +136,37 @@ export default function Home() {
         </div>
 
         <div>
-          <p className="font-semibold">Longest Focus Block (min)</p>
-          <p>{data.longestFocusBlock}</p>
+          <p className="font-semibold">Longest Focus Block</p>
+          <p>{data.longestFocusBlock} min</p>
         </div>
 
         <div>
           <p className="font-semibold">Back-to-Back Meetings</p>
           <p>{data.backToBack}</p>
         </div>
+
+      </div>
+
+      {/* TREND GRAPH */}
+
+      <div className="w-full max-w-xl mt-10">
+        <h2 className="text-xl font-semibold mb-4">
+          Workload Trend
+        </h2>
+
+        <ResponsiveContainer width="100%" height={250}>
+          <LineChart data={history}>
+            <XAxis dataKey="created_at" hide />
+            <YAxis domain={[0,100]} />
+            <Tooltip />
+            <Line
+              type="monotone"
+              dataKey="workload_score"
+              stroke="#ef4444"
+              strokeWidth={3}
+            />
+          </LineChart>
+        </ResponsiveContainer>
       </div>
 
       <button
@@ -130,6 +175,7 @@ export default function Home() {
       >
         Sign Out
       </button>
+
     </main>
   );
 }
