@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "../auth/[...nextauth]/route";
+import { supabase } from "@/lib/supabase";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -102,7 +103,7 @@ export async function GET() {
   if (score < 40) risk = "High";
   else if (score < 70) risk = "Medium";
 
-  return NextResponse.json({
+  const result = {
     totalHours: Number(totalHours.toFixed(2)),
     peakDayHours: Number(peakDayHours.toFixed(2)),
     longestFocusBlock: Math.round(longestFocusBlock),
@@ -110,5 +111,21 @@ export async function GET() {
     lateMeetings,
     workloadScore: Math.round(score),
     risk,
-  });
+  };
+
+  // Store snapshot in Supabase
+  await supabase.from("workload_snapshots").insert([
+    {
+      user_email: session.user?.email,
+      workload_score: result.workloadScore,
+      total_hours: result.totalHours,
+      peak_day_hours: result.peakDayHours,
+      longest_focus_block: result.longestFocusBlock,
+      back_to_back: result.backToBack,
+      late_meetings: result.lateMeetings,
+      risk: result.risk,
+    },
+  ]);
+
+  return NextResponse.json(result);
 }
